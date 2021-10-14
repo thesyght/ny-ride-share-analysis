@@ -9,6 +9,10 @@ import xml.etree.ElementTree as etree
 from shapely import wkt
 from shapely.geometry import Point, Polygon, MultiPolygon
 
+import numpy as np
+from sklearn.cluster import DBSCAN
+from sklearn.neighbors import NearestNeighbors
+
 # import mplleaflet
 
 
@@ -39,14 +43,16 @@ class UberTripCSVReader(CSVReader):
         ''' Read uber trip data which contains datetime and associated lat/long of pickup and base of driver
             Requirements: - File must be given as absolute and exists
                           - The headers: ['Date/Time', 'Lat, Long, Base'] must be available '''
+        print(self.csv_path)
         assert os.path.abspath(self.csv_path) == self.csv_path
         assert os.path.exists(self.csv_path)
         known_headers = ['Date/Time', 'Lat', 'Lon', 'Base']
         with open(self.csv_path, 'r') as _file:
             reader = csv.DictReader(_file)
+            print(reader.fieldnames)
             for known_header in known_headers: assert known_header in reader.fieldnames 
             for row in reader:
-                self.csv_contents += [{'Datetime': datetime.strptime(row['Date/Time'], '%m/%d/%Y %H:%M:%S'), 'Lat': row['Lat'], 'Lon': row['Lon'], 'Base': row['Base']}] # Really slow would replace with own parser
+                self.csv_contents += [{'Datetime': datetime.strptime(row['Date/Time'], '%m/%d/%Y %H:%M:%S'), 'Lat': float(row['Lat']), 'Lon': float(row['Lon']), 'Base': row['Base']}] # Really slow would replace with own parser
     
     def prune_csv_of_points_outside_polygon(self, polygon):
         ''' For a given polygon prune all rows with points outside '''
@@ -54,21 +60,41 @@ class UberTripCSVReader(CSVReader):
         i = True
         for row in self.csv_contents:
             if i:
-                print(row)
-                print(polygon)
                 i = False
             new_contents += [row] if self.check_if_row_valid(row, polygon) else []
         self.csv_contents = new_contents
-        print(len(self.csv_contents))
 
     def save_csv(self):
         ''' Save csv to disk '''
         with open(self.output_path, 'w+') as _file:
-            headers = ['Date', 'Time', 'Lat', 'Lon']
+            headers = ['Date', 'Time', 'Lat', 'Lon', 'Cluster_ID', 'Cluster_Weight']
             writer = csv.DictWriter(_file, fieldnames=headers)
             writer.writeheader()
             for row in self.csv_contents:
-                writer.writerow({'Date': row['Datetime'].strftime("%d/%m/%Y"), 'Time': row['Datetime'].strftime("%H:%M:%S"), 'Lat': row['Lat'], 'Lon': row['Lon']})
+                writer.writerow({'Date': row['Datetime'].strftime("%d/%m/%Y"), 'Time': row['Datetime'].strftime("%H:%M:%S"), 'Lat': row['Lat'], 'Lon': row['Lon'], 'Cluster_ID': row['cluster_id'], 'Cluster_Weight': row['cluster_weight']})
+    
+    def assign_points_to_clusters(self):
+        ''' first calculate the epsilon value, this sets the search distance for DBSCAN '''
+        x = np.array([point['Lon'] for point in self.csv_contents])
+        y = np.array([point['Lat'] for point in self.csv_contents])
+        lat_long = np.column_stack((x, y))
+        lat_long_rads = np.radians(lat_long)
+        # nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(lat_long_rads)
+        # distances, _ = nbrs.kneighbors(lat_long_rads)
+        # eps = float(np.median(distances[:, 1]) / 2)
+        # Have commented out eps discovery using kmeans, process works but after isolating acceptable eps it wasnt worth the computation
+        # using half of the median distance between neighbours, perform DBSCAN clustering and assign the labels as IDs
+        eps = 0.000025
+        print(eps)
+        clustering = DBSCAN(eps=eps, min_samples=15).fit(lat_long_rads)
+        print(max(clustering.labels_))
+        clusters_in_test_area = []
+        for index, point in enumerate(self.csv_contents):
+            point['cluster_id'] = clustering.labels_[index]
+            point['cluster_weight'] = 0 if point['cluster_id'] == -1 else 1
+            if (point['Lat'] >= 40.8293 and point['Lat'] <= 40.8297) or (point['Lon'] <= -73.9279 and point['Lon'] >= -73.9286):
+                clusters_in_test_area += [point['cluster_id']]
+        print(len(set(clusters_in_test_area))) # Used for manual checks before expensive visualisation
 
     def check_if_row_valid(self, row, polygon):
         assert isinstance(polygon, MultiPolygon)
@@ -144,16 +170,17 @@ class NYCBoroughKMLReader(KMLReader):
         return wkt.loads(base_string)
 
 
-class GeomParser:
+class Pipeline:
     ''' Class that can take geometry objects and filter/parse them given some directive '''
     def __init__(self):
         self.uber_data_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../Data/uber-trip-data'))
-        self.consolidated_uber_data = {}
+        self.consolidated_points = []
         self.nyc_gis_kml_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../Data/NYC_Borough_Boundaries.kml'))
         self.kmlReader = NYCBoroughKMLReader(kml_path=self.nyc_gis_kml_path)
         self.operational_borough_name = 'Bronx'
+        self.csv_block_list = ['uber-raw-data-janjune-15.csv']
 
-    def run(self):
+    def prune_uber_csvs(self):
         ''' Pipeline to read in uber data month by month and parse out only the points in the Bronx area '''
         self.kmlReader.read_kml()
         borough_polygon = self.kmlReader.get_borough_polygons(borough_name=self.operational_borough_name)
@@ -162,16 +189,19 @@ class GeomParser:
             csvReader = UberTripCSVReader(csv_path=uber_trip_csv_path)
             csvReader.read_csv()
             csvReader.prune_csv_of_points_outside_polygon(polygon=operational_polygon)
+            csvReader.assign_points_to_clusters()
             csvReader.save_csv()
+            self.consolidated_points += csvReader.get_csv_contents()
+            print(len(self.consolidated_points))
 
     def get_list_of_uber_csv_paths(self):
         assert os.path.exists(self.uber_data_path)
-        uber_trip_csv_paths = [os.path.join(self.uber_data_path, fname) for fname in os.listdir(self.uber_data_path) if fname.endswith('.csv') and 'REFORMATED' not in fname and 'PRUNED' not in fname and 'uber-raw-data' in fname]
+        uber_trip_csv_paths = [os.path.join(self.uber_data_path, fname) for fname in os.listdir(self.uber_data_path) if fname.endswith('.csv') and 'uber-raw-data' in fname and 'REFORMATED' not in fname and 'PRUNED' not in fname and fname not in self.csv_block_list]
         uber_trip_csv_paths.sort()
         return uber_trip_csv_paths
 
 
 if __name__ == '__main__':
-    geomParser = GeomParser()
-    geomParser.run()
+    geomParser = Pipeline()
+    geomParser.prune_uber_csvs()
     
