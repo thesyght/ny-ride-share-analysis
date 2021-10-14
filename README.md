@@ -84,6 +84,14 @@ It's interesting to note that despite the media portrayal of an industry under f
 
 ![Uber and Green Taxi growth upwards](./Figs/linear_growth_uber.png)
 
+### September the 1st - What happened?
+
+Another interesting note is that on 1st of Sept 2016, Taxi's market share which had been slowly falling, rapidly increased, while uber's increased a little. Going through old news stories, two major events happened at this time.
+1. [Uber capped surge pricing](https://www.mercurynews.com/2014/07/07/uber-temporarily-cuts-prices-on-taxi-like-service-in-new-york-city/), this would of had a positive affect on market uptake, but it was likely pushed down by the second.
+2. [Uber drives protested on mass in the late July and early September period due to low wages](https://www.businessinsider.com.au/uber-new-york-city-office-protests-2014-9?r=US&IR=T) this would of meant less ubers to take jobs and negative public attension.
+
+This couple of variables could act as a model (MLR) for the affect that negative public attension and/or saturated workforce can have on market uptake. If a comparable incident where prices were equally dropped and no negative backlash occured was available the true impact of this protest might be modelable.
+
 ### Visualising Uber's Pickups - Base codes were questionable
 
 Base codes used by TLC to keep track of the origin of a taxi have appeared unreliable when applied to the ride share model, only the B02764 base report stayed within a single geographical area, but all other base's also did business within that same area.
@@ -104,7 +112,8 @@ I selected Bronx as a representation of the rest of the data, as an equal reside
 
 ### Visualising Uber's Pickups - Clusters
 
-With this lower quanity data I was able to immediantly notice clusters, these clusters could indicate areas where government bodies could invest time into building ride share friendly infrastructure, or by ride share companies to incentivise drivers to head towards in order to increase likelyhood of work and reduce customer wait times.
+With this lower quanity data I was able to immediantly notice clusters where uber is most active.
+A side note: These clusters could also indicate areas where government bodies could invest time into building ride share friendly infrastructure, or by ride share companies to incentivise drivers to head towards in order to increase likelyhood of work and reduce customer wait times.
 
 I first converted the GPS cords into radians to flatten and account for some level of curivature.
 I used DBscan to cluster, with the EPS value discovered by kmeans as half the median between clusters. The minimum cluster size was set to 15 to ensure that only relevant areas of note were visualised.
@@ -117,10 +126,14 @@ A heat map is then overlayed, the heat map is based on clusters from the weekly 
 
 This part of the analysis could certainly use refinement to narrow in on particular intersections, but for the purpose of finding spot in the city, were particular attension to Uber's popularity there for pickups it serves its purpose.
 
+### Uber's Pickups vs. Competitors - Where next
+
+These clusters are inaffect Uber's activity hotspots and taking leasons from the finacial market in regards to "Momentum" we know that activity in one area acts as a positive feedback loop, encouraging users to move to that area for reasons such as "having a better chance to get a ride" or "because that's where the friend is getting picked up" etc. These areas can act as fighting grounds between rideshares aswell and Uber's performance specifically in these hotspots could be a statistical indicator of market success if we had the ability to compare their pickup rates to other FHVs including taxis.
+
 ## Conclusion
 
 The analysis above produces two major points of note:
-1. Future analysis of the market should not focus on finding a particular time period of untapped profitability, the usual peak times of 7-9am and 6-8pm would be the best time to incentivise drivers to be active.
-2. There exists particular places in cities that can be isolated down to the street corner, that uber pickups are exceptionally common. Infrastructure that can be built to help ensure this popularity doesnt congest common city traffic, or incentives that Uber can have to push drivers to wait in these areas would have the largest impact for their respective use cases.
+1. The usual peak times of 7-9am and 6-8pm are the best time to incentivise drivers to be active, competition in this time appears to have little affect on market share. However, smaller companies can thrive in these off-times, creating a relative niche for themselves.
+2. There exists particular places in cities that can be isolated down to the street corner, that uber pickups are exceptionally common. These spots could be a good place for new rideshare companies to begin chipping away at Uber's market share, as the ability to get a ride in a saturated client environment would be promissing.
 
 
